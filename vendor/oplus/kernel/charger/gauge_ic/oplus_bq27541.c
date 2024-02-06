@@ -3609,6 +3609,7 @@ static int bq28z610_get_prev_battery_bcc_parameters(char *buf)
 	return 0;
 }
 
+#define BUFFER_OFFSET_ADDRESS 8
 static int bq28z610_set_bcc_debug_parameters(const char *buf)
 {
 	int ret = 0;
@@ -3617,7 +3618,7 @@ static int bq28z610_set_bcc_debug_parameters(const char *buf)
 #endif
 
 #ifdef BCC_SET_DEBUG_PARMS
-	if (strlen(buf) <= BCC_PAGE_SIZE) {
+	if (strlen(buf) > 0 && strlen(buf) <= BCC_PAGE_SIZE) {
 		if (strncpy(temp_buf, buf, 7)) {
 			printk(KERN_ERR "%s temp_buf:%s\n", __func__, temp_buf);
 		}
@@ -3630,9 +3631,10 @@ static int bq28z610_set_bcc_debug_parameters(const char *buf)
 			printk(KERN_ERR "%s BCC_N_DEBUG:%d\n",
 				__func__, bcc_debug_mode);
 		}
-		strncpy(bcc_debug_buf, buf + 8, BCC_PAGE_SIZE);
-		printk(KERN_ERR "%s bcc_debug_buf:%s, temp_buf\n",
-			__func__, bcc_debug_buf, temp_buf);
+		if (strlen(buf) > BUFFER_OFFSET_ADDRESS) {
+			strncpy(bcc_debug_buf, buf + BUFFER_OFFSET_ADDRESS, BCC_PAGE_SIZE);
+			printk(KERN_ERR "%s bcc_debug_buf:%s, temp_buf\n", __func__, bcc_debug_buf, temp_buf);
+		}
 		return ret;
 	}
 #endif

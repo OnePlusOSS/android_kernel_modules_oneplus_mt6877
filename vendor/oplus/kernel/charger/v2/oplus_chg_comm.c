@@ -236,6 +236,7 @@ struct oplus_chg_comm {
 	bool fg_soft_reset_done;
 	int fg_soft_reset_fail_cnt;
 	int fg_check_ibat_cnt;
+	int chg_cycle_status;
 };
 
 static struct oplus_comm_spec_config default_spec = {};
@@ -246,6 +247,7 @@ static int noplug_batt_volt_min;
 static bool g_ui_soc_ready;
 static void oplus_comm_set_batt_full(struct oplus_chg_comm *chip, bool full);
 static void oplus_comm_fginfo_reset(struct oplus_chg_comm *chip);
+static void oplus_comm_set_chg_cycle_status(struct oplus_chg_comm *chip, int status);
 static bool fg_reset_test = false;
 module_param(fg_reset_test, bool, 0644);
 MODULE_PARM_DESC(fg_reset_test, "zy0603 fg reset test");
@@ -2787,6 +2789,13 @@ static void oplus_comm_plugin_work(struct work_struct *work)
 			}
 			soc_decimal->calculate_decimal_time = 0;
 		}
+		if (chip->chg_cycle_status & CHG_CYCLE_VOTER__USER) {
+			oplus_comm_set_chg_cycle_status(chip, chip->chg_cycle_status & (~(int)CHG_CYCLE_VOTER__USER));
+			if (!chip->chg_cycle_status) {
+				vote(chip->chg_suspend_votable, DEBUG_VOTER, false, 0, false);
+				vote(chip->chg_disable_votable, MMI_CHG_VOTER, false, 0, false);
+			}
+		}
 	}
 	/* Ensure that the charging status is updated in a timely manner */
 	schedule_work(&chip->gauge_check_work);
@@ -2847,6 +2856,30 @@ static void oplus_comm_set_power_save(struct oplus_chg_comm *chip, bool en)
 	}
 
 	chg_info("chg_powersave=%s\n", en ? "true" : "false");
+}
+
+static void oplus_comm_set_chg_cycle_status(struct oplus_chg_comm *chip, int status)
+{
+	struct mms_msg *msg;
+	int rc;
+
+	if (chip->chg_cycle_status == status)
+		return;
+	chip->chg_cycle_status = status;
+
+	msg = oplus_mms_alloc_msg(MSG_TYPE_ITEM, MSG_PRIO_MEDIUM,
+				  COMM_ITEM_CHG_CYCLE_STATUS);
+	if (msg == NULL) {
+		chg_err("alloc msg error\n");
+		return;
+	}
+	rc = oplus_mms_publish_msg(chip->comm_topic, msg);
+	if (rc < 0) {
+		chg_err("publish chg cycle status msg error, rc=%d\n", rc);
+		kfree(msg);
+	}
+
+	chg_info("chg_cycle_status=%d\n", status);
 }
 
 static int oplus_comm_update_temp_region(struct oplus_mms *mms,
@@ -3251,6 +3284,25 @@ static int oplus_comm_update_rechging(struct oplus_mms *mms,
 	return 0;
 }
 
+static int oplus_comm_update_chg_cycle_status(struct oplus_mms *mms,
+				      union mms_msg_data *data)
+{
+	struct oplus_chg_comm *chip;
+
+	if (mms == NULL) {
+		chg_err("mms is NULL");
+		return -EINVAL;
+	}
+	if (data == NULL) {
+		chg_err("data is NULL");
+		return -EINVAL;
+	}
+	chip = oplus_mms_get_drvdata(mms);
+
+	data->intval = chip->chg_cycle_status;
+	return 0;
+}
+
 static void oplus_comm_update(struct oplus_mms *mms, bool publish)
 {
 }
@@ -3443,6 +3495,16 @@ static struct mms_item oplus_comm_item[] = {
 			.down_thr_enable = false,
 			.dead_thr_enable = false,
 			.update = oplus_comm_update_rechging,
+		}
+	},
+	{
+		.desc = {
+			.item_id = COMM_ITEM_CHG_CYCLE_STATUS,
+			.str_data = false,
+			.up_thr_enable = false,
+			.down_thr_enable = false,
+			.dead_thr_enable = false,
+			.update = oplus_comm_update_chg_cycle_status,
 		}
 	},
 };
@@ -4447,7 +4509,7 @@ static void oplus_comm_reset_chginfo(struct oplus_chg_comm *chip)
 
 	cancel_delayed_work_sync(&chip->charge_timeout_work);
 	/* ensure that max_chg_time_sec has been obtained */
-	if (spec->max_chg_time_sec > 0) {
+	if ((chip->wired_online || chip->wls_online) && spec->max_chg_time_sec > 0) {
 		schedule_delayed_work(
 			&chip->charge_timeout_work,
 			msecs_to_jiffies(spec->max_chg_time_sec *
@@ -4470,9 +4532,23 @@ static ssize_t oplus_comm_chg_cycle_write(struct file *file,
 		return -EFAULT;
 	}
 
-	if (strncmp(proc_chg_cycle_data, "en808", 5) == 0) {
+	if ((strncmp(proc_chg_cycle_data, "en808", 5) == 0) ||
+	    (strncmp(proc_chg_cycle_data, "user_enable", 11) == 0)) {
 		if(chip->unwakelock_chg) {
 			chg_err("unwakelock testing, this test not allowed\n");
+			return -EPERM;
+		}
+		if (strncmp(proc_chg_cycle_data, "en808", 5) == 0) {
+			oplus_comm_set_chg_cycle_status(chip, chip->chg_cycle_status & (~(int)CHG_CYCLE_VOTER__ENGINEER));
+		} else if (chip->chg_cycle_status & CHG_CYCLE_VOTER__USER) {
+			oplus_comm_set_chg_cycle_status(chip, chip->chg_cycle_status & (~(int)CHG_CYCLE_VOTER__USER));
+		} else {
+			chg_err("user_enable already true %d\n", chip->chg_cycle_status);
+			return -EPERM;
+		}
+		chg_info("%s allow charging status=%d\n", proc_chg_cycle_data, chip->chg_cycle_status);
+		if (chip->chg_cycle_status != CHG_CYCLE_VOTER__NONE) {
+			chg_info("voter not allow charging\n");
 			return -EPERM;
 		}
 		chg_info("allow charging.\n");
@@ -4480,11 +4556,22 @@ static ssize_t oplus_comm_chg_cycle_write(struct file *file,
 		vote(chip->chg_disable_votable, MMI_CHG_VOTER, false, 0, false);
 		vote(chip->chg_disable_votable, TIMEOUT_VOTER, false, 0, false);
 		oplus_comm_reset_chginfo(chip);
-	} else if (strncmp(proc_chg_cycle_data, "dis808", 6) == 0) {
+	} else if ((strncmp(proc_chg_cycle_data, "dis808", 6) == 0) ||
+		    (strncmp(proc_chg_cycle_data, "user_disable", 12) == 0)) {
 		if(chip->unwakelock_chg) {
 			chg_err("unwakelock testing, this test not allowed\n");
 			return -EPERM;
 		}
+		if (strncmp(proc_chg_cycle_data, "dis808", 5) == 0) {
+			oplus_comm_set_chg_cycle_status(chip, chip->chg_cycle_status | (int)CHG_CYCLE_VOTER__ENGINEER);
+		} else if ((chip->chg_cycle_status & CHG_CYCLE_VOTER__USER) == 0) {
+			oplus_comm_set_chg_cycle_status(chip, chip->chg_cycle_status | (int)CHG_CYCLE_VOTER__USER);
+		} else {
+			chg_err("user_disable already true %d\n", chip->chg_cycle_status);
+			return -EPERM;
+		}
+		chg_info("%s not allow charging status=%d\n", proc_chg_cycle_data, chip->chg_cycle_status);
+
 		chg_info("not allow charging.\n");
 		vote(chip->chg_suspend_votable, DEBUG_VOTER, true, 1, false);
 		vote(chip->chg_disable_votable, MMI_CHG_VOTER, true, 1, false);

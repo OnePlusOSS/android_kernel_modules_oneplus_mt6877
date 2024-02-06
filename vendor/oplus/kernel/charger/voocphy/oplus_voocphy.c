@@ -7345,8 +7345,7 @@ void oplus_adsp_voocphy_turn_off(void)
 
 	voocphy_info("oplus_adsp_voocphy_turn_off\n");
 
-	if (chip->fastchg_start == true)
-		chip->fastchg_dummy_start = false;
+	chip->fastchg_dummy_start = false;
 	chip->fastchg_ing = false;
 	chip->fastchg_start = false;
 	chip->fastchg_to_normal = false;

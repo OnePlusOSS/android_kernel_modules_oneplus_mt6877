@@ -429,6 +429,12 @@ typedef enum {
 }OPLUS_CHG_STOP_VOTER;
 
 typedef enum {
+	CHG_CYCLE_VOTER__NONE		= 0,
+	CHG_CYCLE_VOTER__ENGINEER	= (1 << 0),
+	CHG_CYCLE_VOTER__USER		= (1 << 1),
+}OPLUS_CHG_CYCLE_VOTER;
+
+typedef enum {
 	CHARGER_STATUS__GOOD,
 	CHARGER_STATUS__VOL_HIGH,
 	CHARGER_STATUS__VOL_LOW,
@@ -1372,6 +1378,7 @@ struct oplus_chg_chip {
 	int full_pre_ffc_mv;
 
 	int bms_heat_temp_compensation;
+	int chg_cycle_status;
 };
 
 

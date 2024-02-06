@@ -69,6 +69,7 @@ enum comm_topic_item {
 	COMM_ITEM_UNWAKELOCK,
 	COMM_ITEM_POWER_SAVE,
 	COMM_ITEM_RECHGING,
+	COMM_ITEM_CHG_CYCLE_STATUS,
 };
 
 enum oplus_chg_ffc_status {
@@ -77,6 +78,12 @@ enum oplus_chg_ffc_status {
 	FFC_FAST,
 	FFC_IDLE,
 };
+
+typedef enum {
+	CHG_CYCLE_VOTER__NONE		= 0,
+	CHG_CYCLE_VOTER__ENGINEER	= (1 << 0),
+	CHG_CYCLE_VOTER__USER		= (1 << 1),
+}OPLUS_CHG_CYCLE_VOTER;
 
 int oplus_comm_switch_ffc(struct oplus_mms *topic);
 const char *oplus_comm_get_temp_region_str(enum oplus_temp_region temp_region);

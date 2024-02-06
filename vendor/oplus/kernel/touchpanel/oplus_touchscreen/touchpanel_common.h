@@ -77,6 +77,7 @@
 #define HEALTH_REPORT_RST_WD        "wd_rst"
 #define HEALTH_REPORT_RST_OTHER     "other_rst"
 #define HEALTH_REPORT_NO_SUITABLE_FREQ  "no_suitable_freq"
+#define HEALTH_REPORT_I2C_TIMEOUT   "i2c_timeout"
 
 #define FINGERPRINT_DOWN_DETECT 0X0f
 #define FINGERPRINT_UP_DETECT 0X1f
@@ -850,6 +851,7 @@ struct touchpanel_data {
 	vk_type  vk_type;                                   /*virtual_key type*/
 	delta_state delta_state;
 	bool exception_upload_support;
+	bool tp_exit_suspend_support;                       /*feature to support tp exit suspend process while i2c transfer timeout*/
 
 	uint32_t irq_flags;                                 /*irq setting flag*/
 	int irq;                                            /*irq num*/
@@ -875,6 +877,9 @@ struct touchpanel_data {
 	int default_hor_area;                               /*parse the horizontal area configed in dts*/
 	int limit_valid;                                    /*show current app in whitlist or not*/
 	int is_suspended;                                   /*suspend/resume flow exec flag*/
+	int tp_is_suspending;                               /*whether tp is suspending*/
+	int tp_is_getting_touch_event;                      /*whether tp is getting touch event*/
+	int tp_need_exit_suspend;                           /*whether tp need to exit suspend*/
 	suspend_resume_state suspend_state;                 /*detail suspend/resume state*/
 	struct wakeup_source *ws;                           /* Qualcomm KBA-211220012446, To make power manager stay awake*/
 	struct wakeup_source *tp_wakelock;  				/* speed_resume add  awakelock*/

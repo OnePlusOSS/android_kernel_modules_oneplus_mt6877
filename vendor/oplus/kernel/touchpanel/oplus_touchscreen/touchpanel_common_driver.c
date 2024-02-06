@@ -846,12 +846,14 @@ static void tp_touch_handle(struct touchpanel_data *ts)
         tp_rate_calc(ts, TP_RATE_START);
     }
 
+	ts->tp_is_getting_touch_event = 1;
     memset(points, 0, sizeof(points));
 
 	if (!ts->enable_point_auto_change) {
 	    obj_attention = ts->ts_ops->get_touch_points(ts->chip_data, points, ts->max_num);
 	    if (obj_attention == -EINVAL) {
 		    TPD_INFO("Invalid points, ignore..\n");
+		    ts->tp_is_getting_touch_event = 0;
 		    return;
 	    }
 	} else {
@@ -861,9 +863,11 @@ static void tp_touch_handle(struct touchpanel_data *ts)
 			    &ts->resolution_info);
 	    if (obj_attention == -EINVAL) {
 		    TPD_INFO("Invalid points, ignore..\n");
+		    ts->tp_is_getting_touch_event = 0;
 		    return;
 	    }
     }
+	ts->tp_is_getting_touch_event = 0;
 
     mutex_lock(&ts->report_mutex);
 
@@ -6585,6 +6589,7 @@ static int init_parse_dts(struct device *dev, struct touchpanel_data *ts)
 	ts->pen_support             = of_property_read_bool(np, "pen_support");
 	ts->snr_read_support = of_property_read_bool(np, "snr_read_support");
 	ts->exception_upload_support = of_property_read_bool(np, "exception_upload_support");
+	ts->tp_exit_suspend_support = of_property_read_bool(np, "tp_exit_suspend_support");
 	rc = of_property_read_u32(np, "smooth_level", &val);
     if (rc) {
         TPD_INFO("smooth_level not specified\n");
@@ -7864,6 +7869,8 @@ static int tp_suspend(struct device *dev)
     TPD_INFO("tp_suspend ts->spuri_fp_touch.fp_trigger =%d  ts->i2c_ready =%d  ts->spuri_fp_touch.lcd_resume_ok=%d \n",
              ts->spuri_fp_touch.fp_trigger, ts->i2c_ready, ts->spuri_fp_touch.lcd_resume_ok);
     ts->spuri_fp_touch.lcd_resume_ok = false;
+
+	ts->tp_is_suspending = 1;
     //step1:detect whether we need to do suspend
     if (ts->input_dev == NULL) {
         TPD_INFO("input_dev  registration is not complete\n");
@@ -7906,6 +7913,16 @@ static int tp_suspend(struct device *dev)
     //step3:Release key && touch event before suspend
     tp_btnkey_release(ts);
     tp_touch_release(ts);
+
+	/* Check whether the i2c transfer times out during interrupt processing touch event */
+	if (ts->tp_need_exit_suspend && ts->tp_exit_suspend_support) {
+		ts->tp_need_exit_suspend = 0;
+		TPD_INFO("%s: i2c transfer timeout when handling touch event, exit suspend.\n", __func__);
+		if (ts->health_monitor_v2_support) {
+			tp_healthinfo_report(&ts->monitor_data_v2, HEALTH_REPORT, HEALTH_REPORT_I2C_TIMEOUT);
+		}
+		goto EXIT;
+	}
 
     //step4:cancel esd test
     if (ts->esd_handle_support) {
@@ -7993,7 +8010,7 @@ EXIT:
 			}
 		}
 	}
-
+	ts->tp_is_suspending = 0;
     mutex_unlock(&ts->mutex);
 
 NO_NEED_SUSPEND:

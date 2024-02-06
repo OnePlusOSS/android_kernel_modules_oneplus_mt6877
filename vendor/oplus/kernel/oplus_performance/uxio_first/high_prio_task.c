@@ -45,11 +45,14 @@ static bool is_zygote_process(struct task_struct *t)
 
 static bool is_system_process(struct task_struct *t)
 {
+	if(t->group_leader && !strncmp(t->group_leader->comm, "ndroid.systemui", 15))
+		return true;
+	if(t->group_leader && t->group_leader->pid == 1)
+		return true;
 	if (is_system_uid(t)) {
 		if (t->group_leader  && (!strncmp(t->group_leader->comm,"system_server", 13) ||
 			!strncmp(t->group_leader->comm, "surfaceflinger", 14) ||
-			!strncmp(t->group_leader->comm, "servicemanager", 14) ||
-			!strncmp(t->group_leader->comm, "ndroid.systemui", 15)))
+			!strncmp(t->group_leader->comm, "servicemanager", 14)))
 				return true;
 	}
 	return false;

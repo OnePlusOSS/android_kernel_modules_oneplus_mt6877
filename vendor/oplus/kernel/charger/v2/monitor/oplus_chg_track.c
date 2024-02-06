@@ -341,6 +341,7 @@ struct oplus_chg_track_status {
 	char wls_break_crux_info[OPLUS_CHG_TRACK_CURX_INFO_LEN];
 
 	bool mmi_chg;
+	bool once_mmi_chg;
 	bool chg_speed_is_slow;
 	bool tbatt_warm_once;
 	bool tbatt_cold_once;
@@ -366,6 +367,7 @@ struct oplus_chg_track_status {
 	int wls_skew_effect_cnt;
 	bool chg_verity;
 	char chg_abnormal_reason[OPLUS_CHG_TRACK_CHG_ABNORMAL_REASON_LENS];
+	int once_chg_cycle_status;
 };
 
 struct oplus_chg_track {
@@ -463,6 +465,7 @@ oplus_chg_track_get_charger_type(struct oplus_monitor *monitor,
 static int oplus_chg_track_obtain_wls_break_sub_crux_info(
 	struct oplus_chg_track *track_chip, char *crux_info);
 static int oplus_chg_track_upload_trigger_data(oplus_chg_track_trigger data);
+static bool oplus_chg_track_get_mmi_chg(void);
 
 #if defined(CONFIG_OPLUS_FEATURE_FEEDBACK) || \
 	defined(CONFIG_OPLUS_FEATURE_FEEDBACK_MODULE) || \
@@ -1475,6 +1478,14 @@ oplus_chg_track_record_charger_info(struct oplus_monitor *monitor,
 			  "$$plugout_utc_t@@%d",
 			  track_status->chg_plugout_utc_t);
 
+	index += snprintf(&(p_trigger_data->crux_info[index]),
+			  OPLUS_CHG_TRACK_CURX_INFO_LEN - index,
+			  "$$mmi_chg@@%d", track_status->once_mmi_chg);
+
+	index += snprintf(&(p_trigger_data->crux_info[index]),
+			  OPLUS_CHG_TRACK_CURX_INFO_LEN - index,
+			  "$$chg_cycle_status@@%d", track_status->once_chg_cycle_status);
+
 	oplus_chg_track_record_general_info(monitor, track_status,
 					    p_trigger_data, index);
 }
@@ -1776,6 +1787,8 @@ static int oplus_chg_track_init(struct oplus_chg_track *track_dev)
 	chip->track_status.cool_down_effect_cnt = 0;
 	chip->track_status.wls_need_upload = false;
 	chip->track_status.wired_need_upload = false;
+	chip->track_status.once_mmi_chg = false;
+	chip->track_status.once_chg_cycle_status = CHG_CYCLE_VOTER__NONE;
 
 	memset(&(chip->track_status.fastchg_break_info), 0,
 	       sizeof(chip->track_status.fastchg_break_info));
@@ -2298,6 +2311,7 @@ static int
 oplus_chg_track_cal_chg_common_mesg(struct oplus_monitor *monitor,
 				    struct oplus_chg_track_status *track_status)
 {
+	bool mmi_chg = false;
 	if (monitor == NULL || track_status == NULL)
 		return -1;
 
@@ -2315,9 +2329,18 @@ oplus_chg_track_cal_chg_common_mesg(struct oplus_monitor *monitor,
 
 	/* TODO: wireless support */
 
-	chg_info("chg_max_temp:%d, batt_max_temp:%d, batt_max_curr:%d, batt_max_vol:%d\n",
+	mmi_chg = oplus_chg_track_get_mmi_chg();
+	if (!track_status->once_mmi_chg && !mmi_chg)
+		track_status->once_mmi_chg = true;
+
+	if (!track_status->once_chg_cycle_status && monitor->chg_cycle_status)
+		track_status->once_chg_cycle_status = monitor->chg_cycle_status;
+
+	chg_info("chg_max_temp:%d, batt_max_temp:%d, batt_max_curr:%d, "
+		"batt_max_vol:%d, once_mmi_chg:%d, once_chg_cycle_status:%d\n",
 		track_status->chg_max_temp, track_status->batt_max_temp,
-		track_status->batt_max_curr, track_status->batt_max_vol);
+		track_status->batt_max_curr, track_status->batt_max_vol,
+		track_status->once_mmi_chg, track_status->once_chg_cycle_status);
 
 	return 0;
 }
@@ -4049,6 +4072,8 @@ static int oplus_chg_track_status_reset_when_plugin(
 		&track_status->chg_plugin_rtc_t);
 	oplus_chg_track_cal_period_chg_capaticy(g_track_chip);
 	track_status->prop_status = monitor->batt_status;
+	track_status->once_mmi_chg = false;
+	track_status->once_chg_cycle_status = CHG_CYCLE_VOTER__NONE;
 	chg_info("chg_start_time:%d, chg_start_soc:%d, chg_start_temp:%d, prop_status:%d\n",
 		track_status->chg_start_time, track_status->chg_start_soc,
 		track_status->chg_start_temp, track_status->prop_status);

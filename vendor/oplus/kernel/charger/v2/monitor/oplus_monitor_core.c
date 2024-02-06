@@ -548,6 +548,11 @@ static void oplus_monitor_comm_subs_callback(struct mms_subscribe *subs,
 						false);
 			chip->rechging = !!data.intval;
 			break;
+		case COMM_ITEM_CHG_CYCLE_STATUS:
+			oplus_mms_get_item_data(chip->comm_topic, id, &data,
+						false);
+			chip->chg_cycle_status = data.intval;
+			break;
 		default:
 			break;
 		}
@@ -609,6 +614,9 @@ static void oplus_monitor_subscribe_comm_topic(struct oplus_mms *topic,
 	oplus_mms_get_item_data(chip->comm_topic, COMM_ITEM_RECHGING, &data,
 				true);
 	chip->rechging = !!data.intval;
+	oplus_mms_get_item_data(chip->comm_topic, COMM_ITEM_CHG_CYCLE_STATUS, &data,
+				true);
+	chip->chg_cycle_status = data.intval;
 }
 
 static void oplus_monitor_vooc_subs_callback(struct mms_subscribe *subs,

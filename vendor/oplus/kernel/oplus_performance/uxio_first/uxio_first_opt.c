@@ -16,6 +16,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/uxio_first_opt_trace.h>
 
+static bool uxio_read_opt = false;
+
 static inline bool should_get_req_from_ux_or_fg(struct request_queue *q)
 {
 	int uxfg_max_depth = q->queue_tags->max_depth - BLK_MIN_BG_DEPTH;
@@ -44,8 +46,14 @@ static inline bool should_get_req_from_fg(struct request_queue *q)
 
 static inline bool should_get_req_from_bg(struct request_queue *q)
 {
-	if (q->in_flight[BLK_RW_BG] < q->queue_tags->bg_max_depth)
+	if (blk_uxio_get_read_opt()) {
+		if (q->in_flight[BLK_RW_BG] < BG_MAX_DEPTH_READ_OPT) {
+			return true;
+		}
+	}
+	else if (q->in_flight[BLK_RW_BG] < q->queue_tags->bg_max_depth) {
 		return true;
+	}
 	return false;
 }
 static struct request * get_request_from_queue(struct request_queue *q, struct list_head *list_head)
@@ -185,4 +193,15 @@ struct request * smart_peek_request(struct request_queue *q)
 
 	return rq;
 
+}
+
+void blk_uxio_set_read_opt(bool enable)
+{
+	uxio_read_opt = enable;
+	printk(KERN_ERR "blk_uxio_set_read_opt: (%s)\n", enable? "true" : "false");
+}
+
+bool blk_uxio_get_read_opt()
+{
+	return uxio_read_opt;
 }

@@ -444,6 +444,7 @@ struct oplus_chg_track_status {
 	int wls_skew_effect_cnt;
 	bool chg_verity;
 	char chg_abnormal_reason[OPLUS_CHG_TRACK_CHG_ABNORMAL_REASON_LENS];
+	int once_chg_cycle_status;
 };
 
 struct oplus_chg_track {
@@ -2089,6 +2090,10 @@ static void oplus_chg_track_record_charger_info(
 		}
 	}
 
+	index += snprintf(&(p_trigger_data->crux_info[index]),
+			  OPLUS_CHG_TRACK_CURX_INFO_LEN - index,
+			  "$$chg_cycle_status@@%d", track_status->once_chg_cycle_status);
+
 	oplus_chg_track_record_general_info(chip, track_status, p_trigger_data, index);
 }
 
@@ -2378,6 +2383,7 @@ static int oplus_chg_track_init(struct oplus_chg_track *track_dev)
 	chip->track_status.real_chg_type = POWER_SUPPLY_TYPE_UNKNOWN;
 	chip->track_status.charger_type_backup = POWER_SUPPLY_TYPE_UNKNOWN;
 	chip->track_status.once_mmi_chg = false;
+	chip->track_status.once_chg_cycle_status = CHG_CYCLE_VOTER__NONE;
 	memset(&(chip->track_status.fastchg_break_info), 0,
 	       sizeof(chip->track_status.fastchg_break_info));
 	memset(chip->wired_break_crux_info, 0,
@@ -3130,11 +3136,14 @@ static int oplus_chg_track_cal_chg_common_mesg(
 	if (!track_status->once_mmi_chg && !chip->mmi_chg)
 		track_status->once_mmi_chg = true;
 
+	if (!track_status->once_chg_cycle_status && chip->chg_cycle_status)
+		track_status->once_chg_cycle_status = chip->chg_cycle_status;
+
 	pr_debug("chg_max_temp:%d, batt_max_temp:%d, batt_max_curr:%d, "
-		"batt_max_vol:%d, once_mmi_chg:%d\n",
+		"batt_max_vol:%d, once_mmi_chg:%d, once_chg_cycle_status:%d\n",
 		track_status->chg_max_temp, track_status->batt_max_temp,
 		track_status->batt_max_curr, track_status->batt_max_vol,
-		track_status->once_mmi_chg);
+		track_status->once_mmi_chg, track_status->once_chg_cycle_status);
 
 	return 0;
 }
@@ -4928,6 +4937,7 @@ static int oplus_chg_track_status_reset_when_plugin(
 	oplus_chg_track_cal_period_chg_capaticy(g_track_chip);
 	track_status->prop_status = chip->prop_status;
 	track_status->once_mmi_chg = false;
+	track_status->once_chg_cycle_status = CHG_CYCLE_VOTER__NONE;
 	track_status->fastchg_to_normal = false;
 	pr_debug("chg_start_time:%d, chg_start_soc:%d, chg_start_temp:%d, "
 		"prop_status:%d\n",

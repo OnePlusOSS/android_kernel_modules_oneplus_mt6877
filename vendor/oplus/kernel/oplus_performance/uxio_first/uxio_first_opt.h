@@ -11,6 +11,7 @@
 #define BLK_MIN_FG_DEPTH	5
 #define BLK_MIN_DEPTH_ON	16
 #define BLK_MAX_BG_DEPTH	24
+#define BG_MAX_DEPTH_READ_OPT 8
 
 extern bool sysctl_uxio_io_opt;
 extern bool blk_pm_allow_request(struct request *rq);
@@ -20,4 +21,6 @@ extern void queue_throtl_add_request(struct request_queue *q,
 extern bool high_prio_for_task(struct task_struct *t);
 extern bool test_ux_task_cpu(int cpu);
 extern bool test_task_ux(struct task_struct *task);
+extern void blk_uxio_set_read_opt(bool enable);
+extern bool blk_uxio_get_read_opt(void);
 #endif /*_OPLUS_UXIO_FIRST_H*/
