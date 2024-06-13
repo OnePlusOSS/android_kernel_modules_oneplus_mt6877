@@ -2000,6 +2000,11 @@ static irqreturn_t bq2560x_irq_handler(int irq, void *data)
 	struct oplus_chg_chip *chip = g_oplus_chip;
 	bool vbus_status = false;
 
+	if (bq == NULL || chip == NULL){
+		chg_err("fail to init chip or bq2560x\n");
+		return IRQ_HANDLED;
+	}
+
 	ret = bq2560x_read_byte(bq, &reg_val, BQ2560X_REG_08);
 	if (ret)
 		return IRQ_HANDLED;
@@ -2293,6 +2298,9 @@ int oplus_bq2560x_set_aicr(int current_ma)
 	int chg_vol = 0;
 	int aicl_point = 0;
 	int aicl_point_temp = 0;
+
+	if (chip == NULL)
+		return -EINVAL;
 
 	if (strcmp(g_bq->chg_dev_name, "primary_chg") == 0) {
 		if(g_bq->chg_type == CHARGER_UNKNOWN){
